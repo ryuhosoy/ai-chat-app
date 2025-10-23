@@ -1,12 +1,39 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Mic, MicOff, Phone, Volume2 } from 'lucide-react-native';
+import { Room } from '@/lib/services/matchingService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { ArrowLeft, Mic, MicOff, Phone, Volume2 } from 'lucide-react-native';
+import { useEffect, useState } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [room, setRoom] = useState<Room | null>(null);
+  const [partner, setPartner] = useState<any>(null);
+
+  useEffect(() => {
+    loadRoomInfo();
+  }, []);
+
+  const loadRoomInfo = async () => {
+    try {
+      const roomData = await AsyncStorage.getItem('current_room');
+      if (roomData) {
+        const parsedRoom: Room = JSON.parse(roomData);
+        setRoom(parsedRoom);
+        
+        // 現在のユーザーID取得
+        const userId = await AsyncStorage.getItem('user_id');
+        
+        // パートナー情報取得
+        const partnerInfo = parsedRoom.participants.find(p => p.userId !== userId);
+        setPartner(partnerInfo);
+      }
+    } catch (error) {
+      console.error('ルーム情報読み込みエラー:', error);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -27,13 +54,15 @@ export default function ChatScreen() {
           <View style={styles.participant}>
             <View style={styles.avatarContainer}>
               <Image 
-                source={{ uri: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150' }}
+                source={{ uri: partner?.avatar || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150' }}
                 style={styles.avatar}
               />
               <View style={styles.onlineIndicator} />
             </View>
-            <Text style={styles.participantName}>Ethan</Text>
-            <Text style={styles.participantStatus}>Human • In Thailand</Text>
+            <Text style={styles.participantName}>{partner?.name || 'ゲスト'}</Text>
+            <Text style={styles.participantStatus}>
+              {partner?.interests?.slice(0, 2).join(' • ') || 'オンライン'}
+            </Text>
           </View>
 
           <View style={styles.participant}>
@@ -43,15 +72,21 @@ export default function ChatScreen() {
               </View>
             </View>
             <Text style={styles.participantName}>ModBot</Text>
-            <Text style={styles.participantStatus}>Your friendly AI assistant</Text>
+            <Text style={styles.participantStatus}>AI司会がサポート中</Text>
           </View>
         </View>
 
         {/* Status */}
         <View style={styles.statusContainer}>
-          <Text style={styles.statusText}>
-            ModBot is making sure we all have a good time!
-          </Text>
+          {room ? (
+            <Text style={styles.statusText}>
+              ✅ マッチング成功！会話をお楽しみください
+            </Text>
+          ) : (
+            <Text style={styles.statusText}>
+              接続中...
+            </Text>
+          )}
         </View>
 
         {/* Controls */}

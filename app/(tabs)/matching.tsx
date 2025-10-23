@@ -1,19 +1,100 @@
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, Users, Loader } from 'lucide-react-native';
+import { MatchingService, Room } from '@/lib/services/matchingService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { ArrowLeft, Loader, Users } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function MatchingScreen() {
   const [isSearching, setIsSearching] = useState(false);
+  const [matchingStatus, setMatchingStatus] = useState('探しています...');
+  const matchingServiceRef = useRef<MatchingService | null>(null);
+  const queueIdRef = useRef<string | null>(null);
 
-  const handleStartSearch = () => {
+  useEffect(() => {
+    // マッチングサービスを初期化
+    matchingServiceRef.current = new MatchingService();
+
+    // クリーンアップ
+    return () => {
+      if (matchingServiceRef.current) {
+        matchingServiceRef.current.cleanup();
+      }
+    };
+  }, []);
+
+  const handleStartSearch = async () => {
     setIsSearching(true);
-    // Simulate matching process
+    setMatchingStatus('マッチング相手を探しています...');
+
+    try {
+      // デモ用のユーザープロフィール（実際にはAsyncStorageやFirebase Authから取得）
+      const userId = await getUserId();
+      const userProfile = {
+        userId,
+        name: 'あなた',
+        interests: ['音楽', '映画', '旅行'],
+        avatar: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150',
+      };
+
+      // 待機キューに参加
+      const queueId = await matchingServiceRef.current!.joinQueue(userProfile);
+      queueIdRef.current = queueId;
+
+      setMatchingStatus('相手を待っています...');
+
+      // マッチングを監視
+      await matchingServiceRef.current!.watchForMatch(
+        queueId,
+        userId,
+        handleMatchSuccess
+      );
+    } catch (error) {
+      console.error('マッチングエラー:', error);
+      Alert.alert('エラー', 'マッチングに失敗しました');
+      setIsSearching(false);
+    }
+  };
+
+  /**
+   * マッチング成功時の処理
+   */
+  const handleMatchSuccess = async (room: Room) => {
+    console.log('マッチング成功！', room);
+    setMatchingStatus('マッチング成功！');
+
+    // ルーム情報を保存
+    await AsyncStorage.setItem('current_room', JSON.stringify(room));
+
+    // チャット画面に遷移
     setTimeout(() => {
       setIsSearching(false);
       router.push('/chat');
-    }, 3000);
+    }, 1000);
+  };
+
+  /**
+   * キャンセル処理
+   */
+  const handleCancel = async () => {
+    if (queueIdRef.current && matchingServiceRef.current) {
+      await matchingServiceRef.current.leaveQueue(queueIdRef.current);
+    }
+    setIsSearching(false);
+    setMatchingStatus('探しています...');
+  };
+
+  /**
+   * ユーザーIDを取得（デモ用）
+   */
+  const getUserId = async (): Promise<string> => {
+    let userId = await AsyncStorage.getItem('user_id');
+    if (!userId) {
+      userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      await AsyncStorage.setItem('user_id', userId);
+    }
+    return userId;
   };
 
   if (isSearching) {
@@ -21,15 +102,28 @@ export default function MatchingScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.searchingContainer}>
           <Loader size={48} color="#FF6B35" />
-          <Text style={styles.searchingTitle}>Finding your duo...</Text>
+          <Text style={styles.searchingTitle}>{matchingStatus}</Text>
           <Text style={styles.searchingSubtitle}>
-            We're on the hunt for the perfect human + AI pair for you! It's usually super quick!
+            他のユーザーを探しています。しばらくお待ちください...
           </Text>
+          
+          {/* 状態表示 */}
+          <View style={styles.statusContainer}>
+            <View style={styles.statusItem}>
+              <Text style={styles.statusEmoji}>🔍</Text>
+              <Text style={styles.statusText}>待機キューに参加中</Text>
+            </View>
+            <View style={styles.statusItem}>
+              <Text style={styles.statusEmoji}>⏳</Text>
+              <Text style={styles.statusText}>マッチング処理中</Text>
+            </View>
+          </View>
+
           <TouchableOpacity 
             style={styles.cancelButton}
-            onPress={() => setIsSearching(false)}
+            onPress={handleCancel}
           >
-            <Text style={styles.cancelButtonText}>Cancel Search</Text>
+            <Text style={styles.cancelButtonText}>キャンセル</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -204,5 +298,24 @@ const styles = StyleSheet.create({
     color: '#FF6B35',
     fontSize: 16,
     fontWeight: '600',
+  },
+  statusContainer: {
+    width: '100%',
+    marginTop: 32,
+    marginBottom: 32,
+  },
+  statusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  statusEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#6B7280',
   },
 });
