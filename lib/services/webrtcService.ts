@@ -1,3 +1,8 @@
+import {
+  mediaDevices,
+  MediaStream,
+  RTCPeerConnection
+} from 'react-native-webrtc';
 import { io, Socket } from 'socket.io-client';
 
 export interface WebRTCConfig {
@@ -30,8 +35,8 @@ class WebRTCService {
     this.roomId = roomId;
     this.userId = userId;
     
-    // Get user media
-    this.localStream = await navigator.mediaDevices.getUserMedia({
+    // Get user media (React Native)
+    this.localStream = await mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
@@ -154,8 +159,9 @@ class WebRTCService {
   }
 
   private playAIAudio(audioData: string) {
-    const audio = new Audio(`data:audio/mp3;base64,${audioData}`);
-    audio.play().catch(console.error);
+    // React Native用の音声再生
+    // 実際の実装では react-native-sound や expo-av を使用
+    console.log('AI音声再生:', audioData);
   }
 
   async sendAudioData(audioData: string) {

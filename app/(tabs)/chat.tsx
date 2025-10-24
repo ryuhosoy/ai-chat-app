@@ -1,9 +1,10 @@
 import { Room } from '@/lib/services/matchingService';
+import { webrtcService } from '@/lib/services/webrtcService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { ArrowLeft, Mic, MicOff, Phone, Volume2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
@@ -11,9 +12,17 @@ export default function ChatScreen() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [room, setRoom] = useState<Room | null>(null);
   const [partner, setPartner] = useState<any>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('接続中...');
 
   useEffect(() => {
     loadRoomInfo();
+    initializeWebRTC();
+    
+    return () => {
+      // クリーンアップ
+      webrtcService.leaveRoom();
+    };
   }, []);
 
   const loadRoomInfo = async () => {
@@ -33,6 +42,70 @@ export default function ChatScreen() {
     } catch (error) {
       console.error('ルーム情報読み込みエラー:', error);
     }
+  };
+
+  const initializeWebRTC = async () => {
+    try {
+      // シグナリングサーバーに接続
+      await webrtcService.initialize('http://localhost:3001');
+      
+      // イベントハンドラー設定
+      webrtcService.onRemoteStream = (stream) => {
+        console.log('リモートストリーム受信:', stream);
+        setIsConnected(true);
+        setConnectionStatus('通話中');
+      };
+      
+      webrtcService.onAIMessage = (data) => {
+        console.log('AI応答受信:', data);
+        // AI応答のUI更新
+      };
+      
+      webrtcService.onUserJoined = (userId) => {
+        console.log('ユーザー参加:', userId);
+        setConnectionStatus('接続中...');
+      };
+      
+      webrtcService.onUserLeft = (userId) => {
+        console.log('ユーザー退出:', userId);
+        setIsConnected(false);
+        setConnectionStatus('接続が切れました');
+      };
+      
+      // ルームに参加
+      if (room) {
+        const userId = await AsyncStorage.getItem('user_id');
+        if (userId) {
+          await webrtcService.joinRoom(room.id, userId);
+        }
+      }
+    } catch (error) {
+      console.error('WebRTC初期化エラー:', error);
+      Alert.alert('エラー', '通話の開始に失敗しました');
+    }
+  };
+
+  const handleMuteToggle = () => {
+    const muted = webrtcService.toggleMute();
+    setIsMuted(muted);
+  };
+
+  const handleEndCall = () => {
+    Alert.alert(
+      '通話を終了',
+      '通話を終了しますか？',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { 
+          text: '終了', 
+          style: 'destructive',
+          onPress: () => {
+            webrtcService.leaveRoom();
+            router.push('/');
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -78,15 +151,9 @@ export default function ChatScreen() {
 
         {/* Status */}
         <View style={styles.statusContainer}>
-          {room ? (
-            <Text style={styles.statusText}>
-              ✅ マッチング成功！会話をお楽しみください
-            </Text>
-          ) : (
-            <Text style={styles.statusText}>
-              接続中...
-            </Text>
-          )}
+          <Text style={styles.statusText}>
+            {isConnected ? '🎉 通話中！' : connectionStatus}
+          </Text>
         </View>
 
         {/* Controls */}
@@ -96,7 +163,7 @@ export default function ChatScreen() {
               styles.controlButton,
               { backgroundColor: isMuted ? '#FEE2E2' : '#F3F4F6' }
             ]}
-            onPress={() => setIsMuted(!isMuted)}
+            onPress={handleMuteToggle}
           >
             {isMuted ? <MicOff size={24} color="#6B7280" /> : <Mic size={24} color="#6B7280" />}
           </TouchableOpacity>
@@ -115,7 +182,7 @@ export default function ChatScreen() {
 
           <TouchableOpacity 
             style={[styles.controlButton, styles.endCallButton]}
-            onPress={() => router.push('/')}
+            onPress={handleEndCall}
           >
             <Phone size={24} color="#FFFFFF" />
           </TouchableOpacity>
