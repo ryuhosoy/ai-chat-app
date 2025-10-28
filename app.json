@@ -11,8 +11,10 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "このアプリは音声通話のためにマイクへのアクセスが必要です。"
-      }
+        "NSMicrophoneUsageDescription": "このアプリは音声通話のためにマイクへのアクセスが必要です。",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.ryuhosoy.aichatapp"
     },
     "android": {
       "adaptiveIcon": {
@@ -26,8 +28,12 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.INTERNET"
-      ]
+      ],
+      "package": "com.ryuhosoy.aichatapp"
     },
     "web": {
       "output": "static",
@@ -51,6 +57,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9547a9d1-97f0-4cb4-a14b-870b3fcf13dd"
+      }
     }
   }
 }
